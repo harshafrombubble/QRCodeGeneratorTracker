@@ -1,0 +1,1 @@
+# QRCodeGeneratorTracker
