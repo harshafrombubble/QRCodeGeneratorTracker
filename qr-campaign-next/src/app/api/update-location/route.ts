@@ -43,7 +43,8 @@ export async function POST(request: Request) {
       .update({
         lat: lat,
         long: long,
-        scans: (flyer.scans || 0) + 1
+        scans: (flyer.scans || 0) + 1,
+        posted_at: new Date().toISOString()
       })
       .eq('id', flyerId)
       .eq('campaign_name', campaignName);

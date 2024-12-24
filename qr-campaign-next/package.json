@@ -27,7 +27,8 @@
     "react-leaflet": "^5.0.0",
     "react-pdf": "^9.2.1",
     "recharts": "^2.15.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "turbopack": "^0.0.1"
   },
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
