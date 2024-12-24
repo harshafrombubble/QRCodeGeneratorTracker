@@ -19,13 +19,14 @@ function decryptIds(encrypted: string) {
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: Promise<string> } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerSupabaseClient();
     
     // Decrypt the ID to get campaign and flyer IDs
-    const encryptedId = await params.id;
+    const { id } = await params;
+    const encryptedId = id;
     const ids = decryptIds(encryptedId);
     if (!ids) {
       return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });

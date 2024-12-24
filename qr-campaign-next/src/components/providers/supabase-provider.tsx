@@ -3,11 +3,13 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect } from 'react';
+import type { Database } from '@/types/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
 
-const Context = createContext<ReturnType<typeof createClientComponentClient> | undefined>(undefined);
+const Context = createContext<SupabaseClient<Database> | undefined>(undefined);
 
 export default function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const supabase = createClientComponentClient();
+  const supabase = createClientComponentClient<Database>();
   const router = useRouter();
 
   useEffect(() => {

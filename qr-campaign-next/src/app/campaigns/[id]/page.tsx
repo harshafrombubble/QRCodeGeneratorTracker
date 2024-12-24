@@ -5,10 +5,10 @@ import { cookies } from 'next/headers';
 export default async function CampaignPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   // Ensure cookies are awaited
   await cookies();
-  
-  return <CampaignDetails id={params.id} />;
+  const { id } = await params;
+  return <CampaignDetails id={id} />;
 } 

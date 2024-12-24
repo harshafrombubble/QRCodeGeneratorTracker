@@ -3,11 +3,12 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = createServerSupabaseClient();
-    const campaignId = params.id;
+    const campaignId = id;
 
     // Get campaign with flyers
     const { data: campaign, error: campaignError } = await supabase
