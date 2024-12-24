@@ -1,0 +1,19 @@
+{
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/leaflet": "^1.9.15",
+    "@types/qrcode": "^1.5.5"
+  },
+  "dependencies": {
+    "@aws-sdk/s3-request-presigner": "^3.717.0",
+    "@types/react-pdf": "^6.2.0",
+    "jimp": "^1.6.0",
+    "jsqr": "^1.4.0",
+    "leaflet": "^1.9.4",
+    "pdf-img-convert": "^2.0.0",
+    "react-leaflet": "^5.0.0",
+    "react-pdf": "^9.2.1",
+    "recharts": "^2.15.0",
+    "sharp": "^0.33.5"
+  }
+}
