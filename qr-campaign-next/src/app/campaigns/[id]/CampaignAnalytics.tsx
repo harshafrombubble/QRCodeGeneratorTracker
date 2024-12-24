@@ -1,7 +1,7 @@
 'use client';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import type { Flyer } from '@/types/supabase';
+import type { Flyer, Scan } from '@/types/supabase';
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
@@ -43,14 +43,7 @@ const getIcon = () => {
 
 interface Props {
   flyers: Flyer[];
-  scan_data: Array<{
-    id: string;
-    scan_time: string;
-    flyer: string;
-    campaign: string;
-    lat?: number;
-    long?: number;
-  }>;
+  scan_data: Scan[];
 }
 
 export default function CampaignAnalytics({ flyers: initialFlyers, scan_data }: Props) {
@@ -92,7 +85,7 @@ export default function CampaignAnalytics({ flyers: initialFlyers, scan_data }: 
     let filtered = scan_data;
 
     if (selectedFlyers.length > 0) {
-      filtered = filtered.filter(scan => selectedFlyers.includes(scan.flyer));
+      filtered = filtered.filter(scan => selectedFlyers.includes(String(scan.flyer)));
     }
 
     if (timeRange !== 'all') {
@@ -202,6 +195,43 @@ export default function CampaignAnalytics({ flyers: initialFlyers, scan_data }: 
           </select>
         </div>
       </div>
+
+      
+      {/* Location Map */}
+      {hasLocations && isClient && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Flyer Locations</h3>
+          <div className="h-[400px] border rounded-lg overflow-hidden">
+            <MapContainer 
+              center={mapCenter} 
+              zoom={13} 
+              style={{ height: '100%', width: '100%' }}
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+              {flyers.map(flyer => 
+                flyer.lat && flyer.long ? (
+                  <Marker 
+                    key={flyer.flyerId} 
+                    position={[flyer.lat, flyer.long]}
+                    icon={icon}
+                  >
+                    <Popup>
+                      <div>
+                        <p><strong>Flyer ID:</strong> {flyer.id}</p>
+                        <p><strong>Scans:</strong> {flyer.scans || 0}</p>
+                        <p><strong>Posted:</strong> {flyer.posted_at ? new Date(flyer.posted_at).toLocaleString() : 'Not posted'}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ) : null
+              )}
+            </MapContainer>
+          </div>
+        </div>
+      )}
 
       {/* Flyers Management */}
       <div>
@@ -373,6 +403,7 @@ export default function CampaignAnalytics({ flyers: initialFlyers, scan_data }: 
           </ResponsiveContainer>
         </div>
       </div>
+
 
       {/* Scan Details Table */}
       <div>

@@ -1,19 +1,12 @@
 'use client';
 
 import { notFound } from 'next/navigation';
-import type { Campaign } from '@/types/supabase';
+import type { Campaign, Scan } from '@/types/supabase';
 import CampaignAnalytics from './CampaignAnalytics';
 import { useEffect, useState } from 'react';
 
 interface CampaignWithScans extends Campaign {
-  scan_data?: Array<{
-    id: string;
-    scan_time: string;
-    flyer: string;
-    campaign: string;
-    lat?: number;
-    long?: number;
-  }>;
+  scan_data?: Scan[];
 }
 
 export default function CampaignDetails({ id }: { id: string }) {

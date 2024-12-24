@@ -27,6 +27,7 @@ export interface Campaign {
   scans: number;
   user: string;
   Flyers?: Flyer[];
+  scan_data?: Scan[];
 }
 
 export interface Flyer {
