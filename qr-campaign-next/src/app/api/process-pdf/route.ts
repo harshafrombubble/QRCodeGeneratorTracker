@@ -142,7 +142,7 @@ export async function POST(request: Request) {
 
     // Initialize Supabase client with cookies
     console.log('Initializing Supabase client...');
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
     const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
 
     // Get user from session

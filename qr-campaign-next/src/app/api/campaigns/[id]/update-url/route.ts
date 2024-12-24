@@ -5,17 +5,18 @@ import type { Database } from '@/types/supabase';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { url } = await request.json();
-    const { id } = params;
+    const { id } = await params;
 
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
+    // Initialize Supabase client with cookies
+    const cookieStore = cookies();
     const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
 
     // Get user from session
