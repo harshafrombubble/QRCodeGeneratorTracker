@@ -53,7 +53,7 @@ interface Props {
   }>;
 }
 
-export default function CampaignAnalytics({ flyers, scan_data }: Props) {
+export default function CampaignAnalytics({ flyers: initialFlyers, scan_data }: Props) {
   const [hasLocations, setHasLocations] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([0, 0]);
   const [icon, setIcon] = useState<any>(null);
@@ -61,6 +61,11 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
   const [selectedFlyers, setSelectedFlyers] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d' | 'all'>('all');
   const [filteredScans, setFilteredScans] = useState(scan_data);
+  const [editingFlyerId, setEditingFlyerId] = useState<number | null>(null);
+  const [newRedirectUrl, setNewRedirectUrl] = useState('');
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [flyers, setFlyers] = useState(initialFlyers);
   
   useEffect(() => {
     setIsClient(true);
@@ -68,6 +73,19 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
       setIcon(getIcon());
     }
   }, []);
+
+  useEffect(() => {
+    setFlyers(initialFlyers);
+    console.log('All Flyer Data:', initialFlyers.map(flyer => ({
+      id: flyer.id,
+      flyerId: flyer.flyerId,
+      url: flyer.url,
+      redirect_url: flyer.redirect_url,
+      scans: flyer.scans,
+      campaign: flyer.campaign,
+      campaign_name: flyer.campaign_name
+    })));
+  }, [initialFlyers]);
 
   useEffect(() => {
     // Filter scans based on selected flyers and time range
@@ -177,7 +195,7 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
             onChange={(e) => setSelectedFlyers(Array.from(e.target.selectedOptions, option => option.value))}
           >
             {flyers.map(flyer => (
-              <option key={flyer.id} value={flyer.id}>
+              <option key={flyer.flyerId} value={flyer.flyerId}>
                 Flyer {flyer.id} ({flyer.scans || 0} scans)
               </option>
             ))}
@@ -185,45 +203,114 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
         </div>
       </div>
 
-      {/* Scan Location Map */}
+      {/* Flyers Management */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Scan Locations</h3>
-        {hasLocations ? (
-          <div className="h-[400px] w-full rounded-lg overflow-hidden">
-            <MapContainer
-              center={mapCenter}
-              zoom={13}
-              style={{ height: '100%', width: '100%' }}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {icon && flyers.map(flyer => {
-                if (flyer.lat && flyer.long) {
-                  return (
-                    <Marker
-                      key={flyer.id}
-                      position={[flyer.lat, flyer.long]}
-                      icon={icon}
-                    >
-                      <Popup>
-                        Flyer ID: {flyer.id}<br />
-                        Scans: {flyer.scans || 0}<br />
-                        Posted: {flyer.posted_at ? new Date(flyer.posted_at).toLocaleString() : 'Not posted'}
-                      </Popup>
-                    </Marker>
-                  );
-                }
-                return null;
-              })}
-            </MapContainer>
-          </div>
-        ) : (
-          <div className="h-[400px] w-full rounded-lg bg-gray-50 flex items-center justify-center">
-            <p className="text-gray-500">No location data available</p>
-          </div>
-        )}
+        <h3 className="text-lg font-semibold mb-4">Flyers Management</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flyer ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scans</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Redirect URL</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {flyers.map((flyer) => (
+                <tr key={flyer.flyerId}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{flyer.id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{flyer.scans || 0}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {editingFlyerId === flyer.flyerId ? (
+                      <input
+                        type="text"
+                        value={newRedirectUrl}
+                        onChange={(e) => setNewRedirectUrl(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        placeholder="Enter new URL"
+                      />
+                    ) : (
+                      flyer.redirect_url || 'No URL set'
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {editingFlyerId === flyer.flyerId ? (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            setIsUpdating(true);
+                            setUpdateError(null);
+                            try {
+                              const response = await fetch('/api/update-redirect-url', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                  flyerId: flyer.flyerId,
+                                  newUrl: newRedirectUrl,
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                const data = await response.json();
+                                throw new Error(data.error || 'Failed to update URL');
+                              }
+
+                              // Update the flyer in the local state
+                              const updatedFlyers = flyers.map(f => 
+                                f.flyerId === flyer.flyerId ? { ...f, redirect_url: newRedirectUrl } : f
+                              );
+                              setFlyers(updatedFlyers);
+                              
+                              setEditingFlyerId(null);
+                              setNewRedirectUrl('');
+                            } catch (error: any) {
+                              setUpdateError(error.message);
+                              console.error('Error updating redirect URL:', error);
+                            } finally {
+                              setIsUpdating(false);
+                            }
+                          }}
+                          disabled={isUpdating}
+                          className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                        >
+                          {isUpdating ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingFlyerId(null);
+                            setNewRedirectUrl('');
+                            setUpdateError(null);
+                          }}
+                          disabled={isUpdating}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingFlyerId(flyer.flyerId);
+                          setNewRedirectUrl(flyer.redirect_url || '');
+                          setUpdateError(null);
+                        }}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        Edit URL
+                      </button>
+                    )}
+                    {updateError && editingFlyerId === flyer.flyerId && (
+                      <p className="text-red-500 text-sm mt-1">{updateError}</p>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Scans per Flyer Chart */}
@@ -231,12 +318,22 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
         <h3 className="text-lg font-semibold mb-4">Scans per Flyer</h3>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={flyerData}>
+            <BarChart 
+              data={flyerData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 65 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="id" />
+              <XAxis 
+                dataKey="id" 
+                label={{ 
+                  value: 'Flyer ID', 
+                  position: 'bottom',
+                  offset: 40
+                }}
+              />
               <YAxis />
               <Tooltip />
-              <Legend />
+              <Legend verticalAlign="top" />
               <Bar dataKey="scans" fill="#4F46E5" name="Number of Scans" />
             </BarChart>
           </ResponsiveContainer>
@@ -286,7 +383,7 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flyer ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -299,7 +396,7 @@ export default function CampaignAnalytics({ flyers, scan_data }: Props) {
                     {scan.flyer}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {scan.lat && scan.long ? `${scan.lat.toFixed(6)}, ${scan.long.toFixed(6)}` : 'No location'}
+                    {scan.redirect_url || 'No URL'}
                   </td>
                 </tr>
               ))}

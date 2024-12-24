@@ -30,23 +30,25 @@ export interface Campaign {
 }
 
 export interface Flyer {
-  id: string;
+  id: number;
+  flyerId: number;
   created_at: string;
   posted_at: string | null;
-  campaign: string;
+  campaign: number;
+  campaign_name: string;
   scans: number | null;
   lat: number | null;
   long: number | null;
-  url: string | null;
+  url: string;
   pdf_url: string | null;
   s3_key: string | null;
+  redirect_url: string;
 }
 
 export interface Scan {
   id: string;
   scan_time: string;
-  flyer: string;
-  campaign: string;
-  lat: number | null;
-  long: number | null;
+  flyer: number;
+  campaign: number | null;
+  redirect_url: string;
 } 

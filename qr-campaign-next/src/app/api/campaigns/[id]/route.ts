@@ -24,7 +24,11 @@ export async function GET(
           long,
           url,
           pdf_url,
-          s3_key
+          s3_key,
+          redirect_url,
+          flyerId,
+          campaign_name,
+          campaign
         )
       `)
       .eq('id', campaignId)
