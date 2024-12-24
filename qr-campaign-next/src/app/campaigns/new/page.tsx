@@ -52,6 +52,7 @@ export default function NewCampaign() {
 
   const [file, setFile] = useState<File | null>(null);
   const [campaignName, setCampaignName] = useState('');
+  const [campaignNameError, setCampaignNameError] = useState('');
   const [targetUrl, setTargetUrl] = useState('');
   const [flyerCount, setFlyerCount] = useState(1);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -241,9 +242,31 @@ export default function NewCampaign() {
     );
   };
 
+  const handleCampaignNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toLowerCase();
+    setCampaignName(value);
+    
+    // Validate the input
+    if (value && !/^[a-z0-9-]*$/.test(value)) {
+      setCampaignNameError('Only lowercase letters, numbers, and hyphens are allowed');
+    } else {
+      setCampaignNameError('');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !qrBounds || isSubmitting) return;
+
+    // Validate campaign name before submission
+    if (!campaignName) {
+      setCampaignNameError('Campaign name is required');
+      return;
+    }
+    if (!/^[a-z0-9-]+$/.test(campaignName)) {
+      setCampaignNameError('Only lowercase letters, numbers, and hyphens are allowed');
+      return;
+    }
 
     setIsSubmitting(true);
     
@@ -323,6 +346,9 @@ export default function NewCampaign() {
       <Script src="//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" />
       <div className="container mx-auto p-4">
         <h1 className="text-2xl font-bold mb-4">Create New Campaign</h1>
+        {remainingCampaigns !== null && (
+          <p className="mb-4">Remaining campaigns: {remainingCampaigns}</p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block mb-2">PDF File:</label>
@@ -372,10 +398,13 @@ export default function NewCampaign() {
             <input
               type="text"
               value={campaignName}
-              onChange={(e) => setCampaignName(e.target.value)}
+              onChange={handleCampaignNameChange}
               className="border p-2 w-full"
               required
             />
+            {campaignNameError && (
+              <p className="mt-1 text-sm text-red-600">{campaignNameError}</p>
+            )}
           </div>
 
           <div>

@@ -20,6 +20,9 @@ export default function CampaignDetails({ id }: { id: string }) {
   const [campaign, setCampaign] = useState<CampaignWithScans | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isEditingUrl, setIsEditingUrl] = useState(false);
+  const [newRedirectUrl, setNewRedirectUrl] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     async function loadCampaign() {
@@ -42,6 +45,12 @@ export default function CampaignDetails({ id }: { id: string }) {
 
     loadCampaign();
   }, [id]);
+
+  useEffect(() => {
+    if (campaign?.url) {
+      setNewRedirectUrl(campaign.url);
+    }
+  }, [campaign?.url]);
 
   const getSignedUrl = async (s3Key: string) => {
     try {
@@ -121,6 +130,34 @@ export default function CampaignDetails({ id }: { id: string }) {
     }
   };
 
+  const handleUpdateRedirectUrl = async () => {
+    if (!campaign || isUpdating) return;
+    setIsUpdating(true);
+
+    try {
+      const response = await fetch(`/api/campaigns/${id}/update-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: newRedirectUrl }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update redirect URL');
+      }
+
+      // Update local state
+      setCampaign(prev => prev ? { ...prev, url: newRedirectUrl } : null);
+      setIsEditingUrl(false);
+    } catch (error) {
+      console.error('Error updating redirect URL:', error);
+      alert('Failed to update redirect URL. Please try again.');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -162,6 +199,55 @@ export default function CampaignDetails({ id }: { id: string }) {
                 {isDownloading ? 'Downloading...' : 'Download All PDFs'}
               </button>
             </div>
+          </div>
+
+          {/* Redirect URL Section */}
+          <div className="bg-gray-50 p-6 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Redirect URL</h3>
+                {!isEditingUrl && (
+                  <p className="mt-1 text-sm text-gray-500">{campaign.url}</p>
+                )}
+              </div>
+              {!isEditingUrl ? (
+                <button
+                  onClick={() => setIsEditingUrl(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  Edit
+                </button>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setIsEditingUrl(false)}
+                    className="text-sm text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateRedirectUrl}
+                    disabled={isUpdating}
+                    className={`text-sm text-blue-600 hover:text-blue-800 ${
+                      isUpdating ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isUpdating ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              )}
+            </div>
+            {isEditingUrl && (
+              <div className="mt-2">
+                <input
+                  type="url"
+                  value={newRedirectUrl}
+                  onChange={(e) => setNewRedirectUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            )}
           </div>
 
           <div className="text-sm text-gray-500">

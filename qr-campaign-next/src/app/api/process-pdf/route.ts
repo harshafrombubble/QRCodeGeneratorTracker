@@ -5,7 +5,6 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PDFDocument, rgb } from 'pdf-lib';
 import QRCode from 'qrcode';
-import CryptoJS from 'crypto-js';
 import type { Database } from '@/types/supabase';
 
 // Configure S3
@@ -18,15 +17,6 @@ const s3Client = new S3Client({
 });
 
 const S3_BUCKET = process.env.AWS_BUCKET_NAME || 'qr-campaign-pdfs';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY!;
-
-function encryptIds(campaignId: string, flyerId: string) {
-  const data = JSON.stringify({ c: campaignId, f: flyerId });
-  return CryptoJS.AES.encrypt(data, ENCRYPTION_KEY).toString()
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
 
 async function uploadToS3(buffer: Buffer, filename: string) {
   const key = `pdfs/${Date.now()}-${filename}`;
@@ -44,7 +34,7 @@ async function uploadToS3(buffer: Buffer, filename: string) {
   };
 }
 
-async function generateFlyerPDF(pdfBuffer: Buffer, flyerId: string, targetUrl: string, qrBounds: { x: number, y: number, width: number, height: number }) {
+async function generateFlyerPDF(pdfBuffer: Buffer, targetUrl: string, qrBounds: { x: number, y: number, width: number, height: number }) {
   const pdfDoc = await PDFDocument.load(pdfBuffer);
   
   // Generate QR code with transparent background
@@ -111,37 +101,75 @@ async function mergePDFs(pdfBuffers: Buffer[]) {
 
 export async function POST(request: Request) {
   try {
+    console.log('Starting PDF processing...');
     // Get form data
     const formData = await request.formData();
+    console.log('Form data received:', {
+      hasFile: !!formData.get('file'),
+      baseUrl: formData.get('baseUrl'),
+      campaignName: formData.get('campaignName'),
+      flyerCount: formData.get('flyerCount'),
+      hasQrBounds: !!formData.get('qrBounds')
+    });
+
     const file = formData.get('file') as File;
     const baseUrl = formData.get('baseUrl') as string;
+    const rawCampaignName = formData.get('campaignName') as string;
     const targetUrl = formData.get('targetUrl') as string;
-    const campaignName = formData.get('campaignName') as string;
     const flyerCount = parseInt(formData.get('flyerCount') as string);
     const qrBounds = JSON.parse(formData.get('qrBounds') as string);
 
-    if (!file || !baseUrl || !targetUrl || !campaignName || !flyerCount || !qrBounds) {
+    if (!file || !baseUrl || !rawCampaignName || !targetUrl || !flyerCount || !qrBounds) {
+      console.error('Missing fields:', { file: !!file, baseUrl, campaignName: rawCampaignName, targetUrl, flyerCount, qrBounds });
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Validate and format campaign name
+    if (rawCampaignName !== rawCampaignName.toLowerCase()) {
+      return NextResponse.json({ 
+        error: 'Campaign name must be lowercase' 
+      }, { status: 400 });
+    }
+
+    const campaignName = rawCampaignName.toLowerCase().trim();
+
+    // Validate campaign name format
+    if (!/^[a-z0-9-]+$/.test(campaignName)) {
+      return NextResponse.json({ 
+        error: 'Campaign name must contain only lowercase letters, numbers, and hyphens' 
+      }, { status: 400 });
+    }
+
     // Initialize Supabase client with cookies
-    const cookieStore = cookies();
+    console.log('Initializing Supabase client...');
+    const cookieStore = await cookies();
     const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
 
     // Get user from session
+    console.log('Getting user session...');
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (userError || !user) {
+    if (userError) {
+      console.error('User authentication error:', userError);
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    if (!user) {
+      console.error('No user found in session');
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+    console.log('User authenticated:', user.id);
 
     // Convert file to buffer
+    console.log('Converting file to buffer...');
     const pdfBuffer = Buffer.from(await file.arrayBuffer());
     
     // Upload original PDF to S3
+    console.log('Uploading original PDF to S3...');
     const original = await uploadToS3(pdfBuffer, 'original.pdf');
+    console.log('Original PDF uploaded:', original.url);
     
     // Create campaign
+    console.log('Creating campaign...');
     const { data: campaign, error: campaignError } = await supabase
       .from('Campaigns')
       .insert([{
@@ -155,19 +183,44 @@ export async function POST(request: Request) {
       .single();
 
     if (campaignError) {
-      throw campaignError;
+      console.error('Campaign creation error:', campaignError);
+      console.error('Campaign data:', { user: user.id, name: campaignName, pdf_url: original.url, flyers: flyerCount });
+      return NextResponse.json({ error: `Campaign creation failed: ${campaignError.message}` }, { status: 500 });
     }
+    console.log('Campaign created:', campaign.id);
+    
+    // Find highest existing flyer ID for this campaign
+    const { data: existingFlyers, error: queryError } = await supabase
+      .from('Flyers')
+      .select('id')
+      .eq('campaign_name', campaignName)
+      .order('id', { ascending: false })
+      .limit(1);
+
+    if (queryError) {
+      console.error('Error querying existing flyers:', queryError);
+      return NextResponse.json({ error: 'Failed to query existing flyers' }, { status: 500 });
+    }
+
+    const startId = existingFlyers && existingFlyers.length > 0 ? existingFlyers[0].id + 1 : 1;
     
     // Generate flyers
     const flyers = [];
     const flyerPdfBuffers = [];
     
-    for (let i = 0; i < flyerCount; i++) {
+    for (let i = startId; i < startId + flyerCount; i++) {
+      // Generate URL using campaign name and flyer id
+      const url = `${baseUrl}/r/${campaignName}/${i}`;
+
       // Create flyer record
       const { data: flyer, error: createError } = await supabase
         .from('Flyers')
         .insert([{
+          id: i,
           campaign: campaign.id,
+          campaign_name: campaignName,
+          url: url,
+          redirect_url: targetUrl,
           pdf_url: null
         }])
         .select()
@@ -175,16 +228,12 @@ export async function POST(request: Request) {
 
       if (createError) throw createError;
 
-      // Generate encrypted URL and update flyer
-      const encryptedId = encryptIds(campaign.id, flyer.id);
-      const url = `${baseUrl}/r/${encryptedId}`;
-
       // Generate and upload flyer PDF
-      const flyerPdfBytes = await generateFlyerPDF(pdfBuffer, flyer.id, url, qrBounds);
+      const flyerPdfBytes = await generateFlyerPDF(pdfBuffer, url, qrBounds);
       const flyerPdfBuffer = Buffer.from(flyerPdfBytes);
       flyerPdfBuffers.push(flyerPdfBuffer);
       
-      const uploaded = await uploadToS3(flyerPdfBuffer, `flyer-${flyer.id}.pdf`);
+      const uploaded = await uploadToS3(flyerPdfBuffer, `flyer-${campaignName}-${i}.pdf`);
       
       // Update flyer with URL and PDF URL
       const { data: updatedFlyer, error: updateError } = await supabase
@@ -194,7 +243,8 @@ export async function POST(request: Request) {
           pdf_url: uploaded.url,
           s3_key: uploaded.key
         })
-        .eq('id', flyer.id)
+        .eq('id', i)
+        .eq('campaign_name', campaignName)
         .select()
         .single();
         
@@ -213,18 +263,23 @@ export async function POST(request: Request) {
     const mergedPdfBuffer = Buffer.from(mergedPdfBytes);
     
     // Upload merged PDF
-    const uploaded = await uploadToS3(mergedPdfBuffer, `campaign-${campaign.id}-all-flyers.pdf`);
+    const uploaded = await uploadToS3(mergedPdfBuffer, `campaign-${campaignName}-all-flyers.pdf`);
     const mergedSignedUrl = await getSignedPdfUrl(uploaded.key);
 
     // Return both individual flyers and merged PDF
     return NextResponse.json({
       campaign,
       flyers,
-      mergedPdfUrl: mergedSignedUrl,
-      pdfBlob: mergedPdfBytes
+      mergedPdfUrl: mergedSignedUrl
     });
     
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Fatal error in PDF processing:', error);
+    console.error('Error stack:', error.stack);
+    return NextResponse.json({ 
+      error: error.message,
+      stack: error.stack,
+      name: error.name 
+    }, { status: 500 });
   }
 } 

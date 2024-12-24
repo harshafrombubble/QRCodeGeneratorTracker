@@ -3,24 +3,50 @@ import { createServerSupabaseClient } from '@/utils/supabase-server';
 
 export async function POST(request: Request) {
   try {
-    const { flyerId, campaignId, lat, long } = await request.json();
+    const { flyerId, campaignName, lat, long } = await request.json();
 
-    if (!flyerId || !campaignId || lat === undefined || long === undefined) {
+    if (!flyerId || !campaignName || lat === undefined || long === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const supabase = createServerSupabaseClient();
 
-    console.log('Updating location for flyer:', { flyerId, campaignId, lat, long });
+    console.log('Updating location for flyer:', { flyerId, campaignName, lat, long });
 
-    // Update flyer with location
+    // Get flyer details first to get campaign ID
+    const { data: flyer, error: flyerError } = await supabase
+      .from('Flyers')
+      .select('campaign, scans, redirect_url')
+      .eq('id', flyerId)
+      .eq('campaign_name', campaignName)
+      .single();
+
+    if (flyerError) {
+      console.error('Error getting flyer:', flyerError);
+      return NextResponse.json({ error: 'Flyer not found' }, { status: 404 });
+    }
+
+    // Get total scan count for campaign
+    const { count: totalScans, error: countError } = await supabase
+      .from('Scans')
+      .select('*', { count: 'exact', head: true })
+      .eq('campaign', flyer.campaign);
+
+    if (countError) {
+      console.error('Error getting scan count:', countError);
+      return NextResponse.json({ error: 'Failed to get scan count' }, { status: 500 });
+    }
+
+    // Update flyer with location and scan count
     const { error: updateError } = await supabase
       .from('Flyers')
       .update({
         lat: lat,
-        long: long
+        long: long,
+        scans: (flyer.scans || 0) + 1
       })
-      .eq('id', flyerId);
+      .eq('id', flyerId)
+      .eq('campaign_name', campaignName);
 
     if (updateError) {
       console.error('Error updating location:', updateError);
@@ -29,14 +55,13 @@ export async function POST(request: Request) {
 
     console.log('Successfully updated location, creating scan record');
 
-    // Create scan record with location
+    // Create scan record
     const { error: scanError } = await supabase
       .from('Scans')
       .insert([{
         flyer: flyerId,
-        campaign: campaignId,
-        lat: lat,
-        long: long
+        campaign: flyer.campaign,
+        redirect_url: flyer.redirect_url
       }]);
 
     if (scanError) {
@@ -44,20 +69,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create scan record' }, { status: 500 });
     }
 
-    console.log('Successfully created scan record, updating scan count');
+    console.log('Successfully created scan record, updating campaign scan count');
 
-    // Update scan count
-    const { error: countError } = await supabase.rpc('increment_scans', {
-      campaign_id: campaignId,
-      flyer_id: flyerId
-    });
+    // Update campaign with accurate total scan count
+    const { error: campaignUpdateError } = await supabase
+      .from('Campaigns')
+      .update({ scans: (totalScans || 0) + 1 })
+      .eq('id', flyer.campaign);
 
-    if (countError) {
-      console.error('Error updating scan count:', countError);
-      return NextResponse.json({ error: 'Failed to update scan count' }, { status: 500 });
+    if (campaignUpdateError) {
+      console.error('Error updating campaign scan count:', campaignUpdateError);
+      return NextResponse.json({ error: 'Failed to update campaign scan count' }, { status: 500 });
     }
 
-    console.log('Successfully updated scan count');
+    console.log('Successfully updated scan counts');
     return NextResponse.json({ success: true });
     
   } catch (error: any) {

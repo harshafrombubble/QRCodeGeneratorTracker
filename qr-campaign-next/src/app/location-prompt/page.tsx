@@ -23,14 +23,14 @@ export default function LocationPrompt() {
   const [retryCount, setRetryCount] = useState(0);
   const searchParams = useSearchParams();
   const flyerId = searchParams.get('flyerId');
-  const campaignId = searchParams.get('campaignId');
+  const campaignName = searchParams.get('campaignName');
   const redirectUrl = searchParams.get('redirectUrl');
 
   const requestLocation = async () => {
     setIsLoading(true);
     setError(null);
 
-    if (!flyerId || !campaignId || !redirectUrl) {
+    if (!flyerId || !campaignName || !redirectUrl) {
       console.log('LocationPrompt: Missing required parameters');
       setError('Missing required parameters');
       setIsLoading(false);
@@ -70,7 +70,7 @@ export default function LocationPrompt() {
           },
           body: JSON.stringify({
             flyerId,
-            campaignId,
+            campaignName,
             lat: position.coords.latitude,
             long: position.coords.longitude
           })
@@ -123,7 +123,7 @@ export default function LocationPrompt() {
       },
       body: JSON.stringify({
         flyerId,
-        campaignId,
+        campaignName,
         lat: null,
         long: null
       })
