@@ -13,6 +13,7 @@
     "@aws-sdk/s3-request-presigner": "^3.485.0",
     "@supabase/auth-helpers-nextjs": "^0.8.7",
     "@supabase/supabase-js": "^2.39.1",
+    "geist": "^1.2.0",
     "leaflet": "^1.9.4",
     "next": "14.0.4",
     "pdf-lib": "^1.17.1",
