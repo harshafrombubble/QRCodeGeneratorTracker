@@ -37,17 +37,21 @@ async function uploadToS3(buffer: Buffer, filename: string) {
 async function generateFlyerPDF(pdfBuffer: Buffer, targetUrl: string, qrBounds: { x: number, y: number, width: number, height: number }) {
   const pdfDoc = await PDFDocument.load(pdfBuffer);
   
-  // Generate QR code with transparent background
-  const qrBuffer = await QRCode.toBuffer(targetUrl, {
-    width: 200,
+  // Generate QR code as data URL
+  const qrDataUrl = await QRCode.toDataURL(targetUrl, {
     margin: 0,
+    width: 1000, // High resolution for better quality
     color: {
       dark: '#000000',  // Black QR code
       light: '#FFFFFF'  // White background
     }
   });
   
-  const qrImage = await pdfDoc.embedPng(qrBuffer);
+  // Convert data URL to image bytes
+  const qrImageBytes = Buffer.from(qrDataUrl.split(',')[1], 'base64');
+  
+  // Embed the QR code image
+  const qrImage = await pdfDoc.embedPng(qrImageBytes);
   
   // Process each page
   for (let i = 0; i < pdfDoc.getPageCount(); i++) {
