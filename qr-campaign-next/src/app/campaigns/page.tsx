@@ -1,29 +1,88 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/providers/supabase-auth-provider';
+import { useSupabase } from '@/components/providers/supabase-provider';
 
 const MAX_CAMPAIGNS = 5;
 
-export default async function CampaignsPage() {
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
+export default function CampaignsPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const supabase = useSupabase();
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  // Get authenticated user
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    redirect('/auth');
-  }
+  const loadCampaigns = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const { data: campaigns, error } = await supabase
+        .from('Campaigns')
+        .select('*')
+        .eq('user', user.id)
+        .order('created_at', { ascending: false });
 
-  // Get campaigns for authenticated user
-  const { data: campaigns } = await supabase
-    .from('Campaigns')
-    .select('*')
-    .eq('user', user.id)
-    .order('created_at', { ascending: false });
+      if (error) throw error;
+      setCampaigns(campaigns || []);
+    } catch (error) {
+      console.error('Error loading campaigns:', error);
+      alert('Failed to load campaigns');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, supabase]);
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+
+    loadCampaigns();
+  }, [user, router, loadCampaigns]);
+
+  const handleDelete = async (campaignId: string, campaignName: string) => {
+    if (!confirm(`Are you sure you want to delete campaign "${campaignName}"?`)) {
+      return;
+    }
+
+    setIsDeleting(campaignId);
+
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete campaign');
+      }
+
+      // Refresh the campaigns list
+      await loadCampaigns();
+
+    } catch (error: any) {
+      console.error('Error deleting campaign:', error);
+      alert(error.message || 'Failed to delete campaign');
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const remainingCampaigns = MAX_CAMPAIGNS - (campaigns?.length || 0);
   const canCreateCampaign = remainingCampaigns > 0;
+
+  if (isLoading && !campaigns.length) {
+    return (
+      <div className="container mx-auto p-4">
+        <p className="text-center">Loading campaigns...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -49,21 +108,34 @@ export default async function CampaignsPage() {
             key={campaign.id}
             className="border rounded-lg p-4 hover:shadow-md transition-shadow"
           >
-            <h2 className="text-xl font-semibold mb-2">{campaign.name}</h2>
-            <div className="text-sm text-gray-600">
-              <p>Created: {new Date(campaign.created_at).toLocaleDateString()}</p>
-              <p>Number of Flyers: {campaign.flyers}</p>
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-semibold mb-2">{campaign.name}</h2>
+                <div className="text-sm text-gray-600">
+                  <p>Created: {new Date(campaign.created_at).toLocaleDateString()}</p>
+                  <p>Number of Flyers: {campaign.flyers}</p>
+                </div>
+                <a
+                  href={`/campaigns/${campaign.id}`}
+                  className="text-blue-500 hover:underline mt-2 inline-block"
+                >
+                  View Details →
+                </a>
+              </div>
+              <button
+                onClick={() => handleDelete(campaign.id, campaign.name)}
+                disabled={isDeleting === campaign.id}
+                className={`text-red-500 hover:text-red-700 px-3 py-1 rounded border border-red-500 hover:border-red-700 ${
+                  isDeleting === campaign.id ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isDeleting === campaign.id ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
-            <a
-              href={`/campaigns/${campaign.id}`}
-              className="text-blue-500 hover:underline mt-2 inline-block"
-            >
-              View Details →
-            </a>
           </div>
         ))}
 
-        {(!campaigns || campaigns.length === 0) && (
+        {(!campaigns || campaigns.length === 0) && !isLoading && (
           <p className="text-gray-500 text-center py-8">
             No campaigns yet. Create your first campaign!
           </p>
