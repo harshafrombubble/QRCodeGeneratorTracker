@@ -7,9 +7,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: Request,
-  { params }: { params: { campaign: string } }
+  { params }: { params: Promise<{ campaign: string }> }
 ) {
-  const { campaign } = params;
+  const { campaign } = await params;
 
   // Set up SSE headers
   const headers = new Headers({

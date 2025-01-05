@@ -1,0 +1,27 @@
+# Next.js
+qr-campaign-next/node_modules
+qr-campaign-next/.next
+qr-campaign-next/out
+
+# Python
+python/__pycache__
+python/venv
+python/env
+python/temp
+
+# Git
+.git
+.gitignore
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+
+# Misc
+*.log
+.DS_Store 

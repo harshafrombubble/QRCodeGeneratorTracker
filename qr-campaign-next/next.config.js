@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-};
+  output: 'standalone',
+  images: {
+    unoptimized: true,
+  },
+  // Add your Supabase URL to allowed domains if you're using Next.js Image component
+  images: {
+    domains: ['supabase.co'],
+  },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
