@@ -63,7 +63,7 @@ export async function GET(
     console.error('Error in campaign route:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
+} 
 
 export async function DELETE(
   request: Request,

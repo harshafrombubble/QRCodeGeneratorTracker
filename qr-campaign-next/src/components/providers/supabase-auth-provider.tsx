@@ -22,11 +22,17 @@ export default function SupabaseAuthProvider({
   children: React.ReactNode;
 }) {
   const { auth } = useSupabase();
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<User | null>(serverSession?.user || null);
+  const [isLoading, setIsLoading] = useState<boolean>(!serverSession);
 
   useEffect(() => {
-    // Initial user check
+    if (serverSession?.user) {
+      setUser(serverSession.user);
+      setIsLoading(false);
+      return;
+    }
+
+    // Initial user check only if no server session
     auth.getUser().then(({ data: { user }, error }) => {
       setUser(user);
       setIsLoading(false);
@@ -48,7 +54,7 @@ export default function SupabaseAuthProvider({
     return () => {
       subscription.unsubscribe();
     };
-  }, [auth]);
+  }, [auth, serverSession]);
 
   const value = {
     user,

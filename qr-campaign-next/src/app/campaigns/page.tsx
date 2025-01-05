@@ -8,22 +8,32 @@ import { useSupabase } from '@/components/providers/supabase-provider';
 const MAX_CAMPAIGNS = 5;
 
 export default function CampaignsPage() {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const supabase = useSupabase();
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
+  console.log('Render state:', { user, isAuthLoading, isLoading, campaignsLength: campaigns.length });
+
   const loadCampaigns = useCallback(async () => {
-    if (!user) return;
+    console.log('loadCampaigns called, user:', user?.id);
+    if (!user) {
+      console.log('No user, setting loading to false');
+      setIsLoading(false);
+      return;
+    }
     
     try {
+      console.log('Fetching campaigns for user:', user.id);
       const { data: campaigns, error } = await supabase
         .from('Campaigns')
         .select('*')
         .eq('user', user.id)
         .order('created_at', { ascending: false });
+
+      console.log('Query result:', { campaigns, error });
 
       if (error) throw error;
       setCampaigns(campaigns || []);
@@ -31,18 +41,21 @@ export default function CampaignsPage() {
       console.error('Error loading campaigns:', error);
       alert('Failed to load campaigns');
     } finally {
+      console.log('Setting loading to false');
       setIsLoading(false);
     }
   }, [user, supabase]);
 
   useEffect(() => {
-    if (!user) {
+    console.log('Effect running, auth state:', { user: user?.id, isAuthLoading });
+    if (!isAuthLoading && !user) {
+      console.log('No user and not loading, redirecting to auth');
       router.push('/auth');
       return;
     }
 
     loadCampaigns();
-  }, [user, router, loadCampaigns]);
+  }, [user, router, loadCampaigns, isAuthLoading]);
 
   const handleDelete = async (campaignId: string, campaignName: string) => {
     if (!confirm(`Are you sure you want to delete campaign "${campaignName}"?`)) {
@@ -76,7 +89,7 @@ export default function CampaignsPage() {
   const remainingCampaigns = MAX_CAMPAIGNS - (campaigns?.length || 0);
   const canCreateCampaign = remainingCampaigns > 0;
 
-  if (isLoading && !campaigns.length) {
+  if ((isLoading || isAuthLoading) && !campaigns.length) {
     return (
       <div className="container mx-auto p-4">
         <p className="text-center">Loading campaigns...</p>
